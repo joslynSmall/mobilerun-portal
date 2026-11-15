@@ -643,7 +643,7 @@ class ApiHandler(
         }
     }
 
-    fun getScreenshot(hideOverlay: Boolean): ApiResponse {
+    fun getScreenshot(hideOverlay: Boolean, options: ScreenshotOptions = ScreenshotOptions()): ApiResponse {
         return try {
             val future = stateRepo.takeScreenshot(hideOverlay)
             // Wait up to a fixed timeout
@@ -659,7 +659,8 @@ class ApiHandler(
                 // val bytes = android.util.Base64.decode(result, android.util.Base64.DEFAULT)
 
                 // use base64 encoding to be compatible with json rpc 1.0.
-                ApiResponse.Text(result)
+                // Non-default options re-encode (e.g. smaller JPEG); defaults return the PNG as-is.
+                ApiResponse.Text(ScreenshotTranscoder.transcode(result, options))
             }
         } catch (e: java.util.concurrent.TimeoutException) {
             ApiResponse.Error("Screenshot timeout - operation took too long")

@@ -198,7 +198,8 @@ class ActionDispatcher(
             "screenshot" -> {
                 // Default to hiding overlay unless specified otherwise
                 val hideOverlay = params.optBoolean("hideOverlay", true)
-                apiHandler.getScreenshot(hideOverlay)
+                // Optional: format (png|jpeg|webp), quality (1-100), scale (0-1], maxSide (px)
+                apiHandler.getScreenshot(hideOverlay, com.mobilerun.portal.api.ScreenshotOptions.from(params))
             }
 
             "packages" -> {
