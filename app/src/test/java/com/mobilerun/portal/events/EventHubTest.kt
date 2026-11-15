@@ -122,6 +122,28 @@ class EventHubTest {
     }
 
     @Test
+    fun localDeviceEventRelay_skipsConnectionsThatOptOutOfEvents() {
+        val quiet = mockk<WebSocket>()
+        val listener = mockk<WebSocket>()
+        val quietSent = mutableListOf<String>()
+        val listenerSent = mutableListOf<String>()
+        every { quiet.isOpen } returns true
+        every { listener.isOpen } returns true
+        every { quiet.send(any<String>()) } answers { quietSent += invocation.args[0] as String; Unit }
+        every { listener.send(any<String>()) } answers { listenerSent += invocation.args[0] as String; Unit }
+
+        val relay = LocalDeviceEventRelay(connectionsProvider = { listOf(quiet, listener) })
+        relay.register(quiet, "/?token=abc&events=none")
+        relay.register(listener, "/?token=abc")
+        relay.emit(PortalEvent(EventType.NOTIFICATION, timestamp = 1L, payload = "x"))
+
+        assertEquals(0, quietSent.size)
+        assertEquals(1, listenerSent.size)
+        assertEquals(true, LocalDeviceEventRouting.wantsEvents("/?token=abc"))
+        assertEquals(false, LocalDeviceEventRouting.wantsEvents("/?token=abc&events=NONE"))
+    }
+
+    @Test
     fun localDeviceEventRelay_sendsOneMessagePerConnection() {
         val connection = mockk<WebSocket>()
         val sentMessages = mutableListOf<String>()

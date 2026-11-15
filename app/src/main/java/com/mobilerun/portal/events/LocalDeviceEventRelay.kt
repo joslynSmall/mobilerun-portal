@@ -16,6 +16,8 @@ internal object LocalDeviceEventRouting {
     private const val EVENT_FORMAT_QUERY_PARAM = "eventFormat"
     private const val LEGACY_EVENT_FORMAT = "legacy"
     private const val RPC_EVENT_FORMAT = "rpc"
+    private const val EVENTS_QUERY_PARAM = "events"
+    private const val EVENTS_NONE = "none"
 
     fun extractToken(resourceDescriptor: String?): String? =
         queryParam(resourceDescriptor, TOKEN_QUERY_PARAM)
@@ -28,6 +30,15 @@ internal object LocalDeviceEventRouting {
             LocalDeviceEventFormat.LEGACY
         }
     }
+
+    /**
+     * `events=none` marks a request/response-only connection: no device events are
+     * pushed to it. A client that only reads while waiting for a reply (e.g. an
+     * ESP32 bridge) otherwise lets pushed events pile up in its small TCP window
+     * between requests, and its next reply arrives behind stalled retransmissions.
+     */
+    fun wantsEvents(resourceDescriptor: String?): Boolean =
+        !queryParam(resourceDescriptor, EVENTS_QUERY_PARAM).equals(EVENTS_NONE, ignoreCase = true)
 
     fun encodeEvent(event: PortalEvent, format: LocalDeviceEventFormat): String {
         return when (format) {
@@ -62,20 +73,25 @@ internal class LocalDeviceEventRelay(
     private val onSendFailure: (WebSocket, Exception) -> Unit = { _, _ -> },
 ) {
     private val connectionFormats = ConcurrentHashMap<WebSocket, LocalDeviceEventFormat>()
+    private val muted: MutableSet<WebSocket> = ConcurrentHashMap.newKeySet()
 
     fun register(connection: WebSocket, resourceDescriptor: String?) {
         connectionFormats[connection] = LocalDeviceEventRouting.resolveFormat(resourceDescriptor)
+        if (!LocalDeviceEventRouting.wantsEvents(resourceDescriptor)) {
+            muted += connection
+        }
     }
 
     fun unregister(connection: WebSocket?) {
         if (connection != null) {
             connectionFormats.remove(connection)
+            muted.remove(connection)
         }
     }
 
     fun emit(event: PortalEvent) {
         for (connection in connectionsProvider()) {
-            if (!connection.isOpen) continue
+            if (!connection.isOpen || connection in muted) continue
 
             val format = connectionFormats[connection] ?: LocalDeviceEventFormat.RPC
             val message = LocalDeviceEventRouting.encodeEvent(event, format)

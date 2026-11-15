@@ -49,10 +49,14 @@ class StateRepository(private val service: MobilerunAccessibilityService?) {
                 // including when building fails. Mark the current candidate consumed
                 // before invoking it so cleanup only recycles untouched roots.
                 consumedCount++
+                val windowIndex = consumedCount - 1
                 val tree = AccessibilityTreeBuilder.buildFullAccessibilityTreeJson(
                     candidate.root,
                     bounds,
                 ) ?: continue
+                // Index of this root among resolved windows; node/action uses it with the
+                // child-index path to locate a node again.
+                tree.put("windowIndex", windowIndex)
 
                 val primary = primaryTree
                 if (primary == null) {
@@ -122,4 +126,28 @@ class StateRepository(private val service: MobilerunAccessibilityService?) {
     fun updateSocketServerPort(port: Int): Boolean = service?.updateSocketServerPort(port) ?: false
 
     fun inputText(text: String, clear: Boolean): Boolean = service?.inputText(text, clear) ?: false
+
+    /**
+     * Perform a native accessibility action on a node picked from a previous `state`.
+     * Windows are resolved the same way as for `state`, so `target.windowIndex`
+     * refers to the same window while the screen is unchanged.
+     */
+    fun performNodeAction(
+        target: NodeActions.Target,
+        actionId: Int,
+        arguments: android.os.Bundle?,
+    ): NodeActions.Outcome {
+        val svc = service ?: return NodeActions.Outcome.Failed("accessibility service not available")
+        val candidates = AccessibilityRootResolver.resolve(svc)
+        val chosen = candidates.getOrNull(target.windowIndex)
+        try {
+            if (chosen == null) {
+                return NodeActions.Outcome.Failed("window ${target.windowIndex} not found: observe again")
+            }
+            // perform() recycles the root it is given.
+            return NodeActions.perform(chosen.root, target, actionId, arguments)
+        } finally {
+            recycleRoots(candidates.filter { it !== chosen }.map { it.root })
+        }
+    }
 }

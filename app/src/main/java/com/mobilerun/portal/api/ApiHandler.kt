@@ -643,6 +643,32 @@ class ApiHandler(
         }
     }
 
+    /**
+     * `node/action`: perform a native accessibility action on a node from `state`.
+     * params: window (int), path (child-index list from the window root),
+     * bounds ([l,t,r,b], optional guard), className (optional guard),
+     * action (name such as CLICK / SCROLL_BACKWARD / SET_TEXT, or numeric id),
+     * args (optional object: text / start,end / value / row,column).
+     */
+    fun performNodeAction(params: org.json.JSONObject): ApiResponse {
+        val target = com.mobilerun.portal.core.NodeActions.Target.from(params)
+            ?: return ApiResponse.Error("Missing or invalid param: 'path'")
+        val actionName = params.optString("action", "")
+        if (actionName.isEmpty()) return ApiResponse.Error("Missing required param: 'action'")
+        val actionId = com.mobilerun.portal.core.NodeActions.idOf(actionName)
+            ?: return ApiResponse.Error("Unknown action: $actionName")
+        val args = com.mobilerun.portal.core.NodeActions.arguments(actionId, params.optJSONObject("args"))
+        return when (val outcome = stateRepo.performNodeAction(target, actionId, args)) {
+            is com.mobilerun.portal.core.NodeActions.Outcome.Done ->
+                if (outcome.performed) {
+                    ApiResponse.Success("${com.mobilerun.portal.core.NodeActions.nameOf(actionId)} performed")
+                } else {
+                    ApiResponse.Error("${com.mobilerun.portal.core.NodeActions.nameOf(actionId)} was rejected by the app")
+                }
+            is com.mobilerun.portal.core.NodeActions.Outcome.Failed -> ApiResponse.Error(outcome.reason)
+        }
+    }
+
     fun getScreenshot(hideOverlay: Boolean, options: ScreenshotOptions = ScreenshotOptions()): ApiResponse {
         return try {
             val future = stateRepo.takeScreenshot(hideOverlay)

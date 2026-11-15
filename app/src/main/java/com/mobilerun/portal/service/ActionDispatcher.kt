@@ -87,6 +87,8 @@ class ActionDispatcher(
                 apiHandler.performSwipe(startX, startY, endX, endY, duration)
             }
 
+            "node/action" -> apiHandler.performNodeAction(params)
+
             "global" -> {
                 val actionId = params.optInt("action", 0)
                 apiHandler.performGlobalAction(actionId)

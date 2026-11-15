@@ -114,6 +114,9 @@ object AccessibilityTreeBuilder {
                     activeNodePath,
                 )
                 if (childJson != null) {
+                    // Raw index in the parent's child list (the visibility filter can drop
+                    // siblings); node/action walks these indices to find the node again.
+                    childJson.put("childIndex", i)
                     childrenArray.put(childJson)
                 }
             }
@@ -305,23 +308,9 @@ object AccessibilityTreeBuilder {
                     put("id", action.id)
                     put("label", action.label?.toString() ?: "")
 
-                    // Map common action IDs to readable names
-                    val actionName = when (action.id) {
-                        AccessibilityNodeInfo.ACTION_CLICK -> "CLICK"
-                        AccessibilityNodeInfo.ACTION_LONG_CLICK -> "LONG_CLICK"
-                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> "SCROLL_FORWARD"
-                        AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> "SCROLL_BACKWARD"
-                        AccessibilityNodeInfo.ACTION_FOCUS -> "FOCUS"
-                        AccessibilityNodeInfo.ACTION_CLEAR_FOCUS -> "CLEAR_FOCUS"
-                        AccessibilityNodeInfo.ACTION_SELECT -> "SELECT"
-                        AccessibilityNodeInfo.ACTION_CLEAR_SELECTION -> "CLEAR_SELECTION"
-                        AccessibilityNodeInfo.ACTION_SET_TEXT -> "SET_TEXT"
-                        AccessibilityNodeInfo.ACTION_COPY -> "COPY"
-                        AccessibilityNodeInfo.ACTION_PASTE -> "PASTE"
-                        AccessibilityNodeInfo.ACTION_CUT -> "CUT"
-                        else -> "UNKNOWN_${action.id}"
-                    }
-                    put("name", actionName)
+                    // Framework names for every standard action (see NodeActions); the same
+                    // names are accepted by the `node/action` method.
+                    put("name", NodeActions.nameOf(action.id))
                 }
                 actionsArray.put(actionObj)
             }
